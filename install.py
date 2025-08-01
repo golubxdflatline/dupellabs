@@ -18,7 +18,10 @@ PACKAGES = [
     'numpy',
     'librosa',
     'soundfile',
-    'pydub'
+    'pydub',
+    'onnxruntime',
+    'audio-separator',
+    'moviepy==1.0.3'
 ]
 
 class InstallerApp:

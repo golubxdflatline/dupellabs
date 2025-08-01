@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import threading
 import os
+import shutil
 import subprocess
 import whisper
 import pyttsx3
@@ -15,12 +16,15 @@ from TTS.api import TTS
 import numpy as np
 import librosa
 import soundfile as sf
+from audio_separator.separator import Separator
+from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip
+
 
 class dupellabs:
     def __init__(self, root):
         self.root = root
         self.root.title("dupellabs")
-        self.root.geometry("900x800")
+        self.root.geometry("1000x900")
         
         self.video_path = tk.StringVar()
         self.output_path = tk.StringVar()
@@ -29,6 +33,7 @@ class dupellabs:
         self.tts_engine = None
         self.voice_clone_model = None
         self.translator = Translator()
+        self.separator = Separator()
         self.is_processing = False
         
         self.whisper_languages = {
@@ -278,11 +283,18 @@ class dupellabs:
         model_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
         
         ttk.Label(model_frame, text="модель whisper:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.model_var = tk.StringVar(value="base")
+        self.model_var = tk.StringVar(value="large")
         model_combo = ttk.Combobox(model_frame, textvariable=self.model_var, 
                                   values=["tiny", "base", "small", "medium", "large"], 
                                   state="readonly")
-        model_combo.grid(row=0, column=1, padx=(5, 0), sticky=tk.W)
+        model_combo.grid(row=0, column=1, padx=(5, 40), sticky=tk.W)
+
+        ttk.Label(model_frame, text="модель separator (сверху - качество, снизу - скорость)").grid(row=0, column=3, sticky=tk.W, pady=5)
+        self.separator_model = tk.StringVar(value="model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt")
+        separator_model_combo = ttk.Combobox(model_frame,textvariable=self.separator_model,
+                                             values=["model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt", "model_bs_roformer_ep_317_sdr_12.9755.ckpt", "UVR-MDX-NET-Inst_HQ_3.onnx", "UVR_MDXNET_KARA_2.onnx"],
+                                             state="readonly")
+        separator_model_combo.grid(row=0, column=4, padx=(5, 0), sticky=tk.W)
         
 
         voice_frame = ttk.LabelFrame(main_frame, text="настройки голоса", padding="10")
@@ -300,9 +312,14 @@ class dupellabs:
         ttk.Label(voice_frame, text="референс звук (только для файла):").grid(row=1, column=0, sticky=tk.W, pady=5)
         ttk.Entry(voice_frame, textvariable=self.reference_audio_path, width=50).grid(row=1, column=1, columnspan=2, padx=(5, 5), sticky=(tk.W, tk.E))
         ttk.Button(voice_frame, text="указать", command=self.browse_reference_audio).grid(row=1, column=3)
+
+        separator_settings_frame = ttk.LabelFrame(main_frame, text="настройки separator (отделяет голос от музыки)", padding="10")
+        separator_settings_frame.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        self.separator_enabled = tk.BooleanVar(value=True)
+        ttk.Checkbutton(separator_settings_frame, text="включить separator?", variable=self.separator_enabled).pack(anchor='w')
         
         tts_settings_frame = ttk.LabelFrame(main_frame, text="ттс настройки", padding="10")
-        tts_settings_frame.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        tts_settings_frame.grid(row=7, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
         
         ttk.Label(tts_settings_frame, text="скорость:").grid(row=0, column=0, padx=(0, 5))
         self.speed_var = tk.IntVar(value=150)
@@ -318,7 +335,7 @@ class dupellabs:
         tts_settings_frame.columnconfigure(3, weight=1)
         
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=7, column=0, columnspan=3, pady=20)
+        button_frame.grid(row=8, column=0, columnspan=3, pady=20)
         
         self.process_btn = ttk.Button(button_frame, text="подписаться на канал лаласкул", 
                                      command=self.start_dubbing_process)
@@ -450,17 +467,39 @@ class dupellabs:
         except Exception as e:
             self.log(f"ошибка экстракта файла: {str(e)}")
             return False
+        
+    def combine_audio(self, audio_1, audio_2, output_path):
+        """комбинирование вокала с инструменталом"""
+        try:
+            cmd = [
+                'ffmpeg', '-i', audio_1, 
+                '-i', audio_2, '-filter_complex', 
+                '[0:a][1:a]amix=inputs=2:duration=longest',
+                output_path
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                raise Exception(f"ошибка FFmpeg: {result.stderr}")
+            
+            return True
+        except Exception as e:
+            self.log(f"ошибка комбинирования: {str(e)}")
+            return False
     
-    def extract_voice_sample_from_video(self, video_path, output_audio_path, transcript_result):
+    def extract_voice_sample_from_video(self, video_path, output_audio_path, transcript_result, audio_vocal):
         """извлекаем сэмпл голоса из видео для клонирования"""
         try:
             self.update_status("извлекаем сэмпл голоса из видео...")
             self.log("извлекаем сэмпл голоса...")
-            
+
             temp_full_audio = output_audio_path + "_full.wav"
-            if not self.extract_audio(video_path, temp_full_audio):
+
+            if audio_vocal and os.path.exists(audio_vocal):
+                shutil.copyfile(audio_vocal, temp_full_audio)
+            elif not self.extract_audio(video_path, temp_full_audio):
                 return None
-            
+
             audio_data, sr = librosa.load(temp_full_audio, sr=22050)
             
             segments = transcript_result.get('segments', [])
@@ -834,7 +873,16 @@ class dupellabs:
             
             with tempfile.TemporaryDirectory() as temp_dir:
                 video_name = Path(video_file).stem
+                temp_video = os.path.join(temp_dir,"temp_video.mp4")
+
                 temp_audio = os.path.join(temp_dir, "extracted_audio.wav")
+                temp_audio_vocal = os.path.join(temp_dir, "extracted_audio_vocal.wav")
+                temp_audio_instrumental = os.path.join(temp_dir, "extracted_audio_instrumental.wav")
+                temp_audio_names = {
+                    "Vocals": "extracted_audio_vocal",
+                    "Instrumental": "extracted_audio_instrumental",
+                }
+
                 voice_sample_audio = os.path.join(temp_dir, "voice_sample.wav")
                 dubbed_audio = os.path.join(temp_dir, "dubbed_audio.wav")
                 
@@ -842,14 +890,38 @@ class dupellabs:
                 output_video = os.path.join(output_dir, f"{video_name}_dubbed{lang_suffix}.mp4")
                 transcript_file = os.path.join(output_dir, f"{video_name}_transcript{lang_suffix}.json")
                 voice_sample_file = os.path.join(output_dir, f"{video_name}_voice_sample{lang_suffix}.wav")
+
+                clip = VideoFileClip(str(Path(video_file)))
+                watermark = ImageClip("watermark.png").set_duration(clip.duration).set_position(lambda t: (clip.w - watermark.w - 5, clip.h - watermark.h - 10))
+
+                separated_audio = None
+
+                if self.separator_enabled.get():
+                    self.separator.output_dir = temp_dir
+                    separator_model = self.separator_model.get()
+                    self.separator.load_model(separator_model)
+                    self.log(f"загружена модель сепаратора: {separator_model}")
+
+                self.log("шаг 0: добавляем вотермарку...")
+
+                video_with_watermark = CompositeVideoClip([clip,watermark])
+                video_with_watermark.write_videofile(temp_video)
                 
                 self.log("шаг 1: берем звук из видео...")
                 if not self.extract_audio(video_file, temp_audio):
                     return
                 self.log("экстракция звука из файла завершена.")
-                
+
+                if self.separator_enabled.get():
+                    self.log("шаг 1.1: отделяем вокал от инструментала...")
+                    separated_audio = self.separator.separate(temp_audio,temp_audio_names) 
+
+                audio_source_temp = temp_audio_vocal if separated_audio else temp_audio
+                audio_source_dubbed = temp_audio_vocal if separated_audio else dubbed_audio
+
                 self.log("шаг 2: транскрипция звука...")
-                transcript_result = self.transcribe_audio(temp_audio)
+                transcript_result = self.transcribe_audio(audio_source_temp)
+
                 if transcript_result is None:
                     return
                 
@@ -858,12 +930,11 @@ class dupellabs:
                 
                 reference_audio_for_cloning = None
                 if voice_method == "video_clone":
-                    self.log("шаг 3а: извлекаем сэмпл голоса из видео...")
+                    self.log("шаг 3: извлекаем сэмпл голоса из видео...")
                     reference_audio_for_cloning = self.extract_voice_sample_from_video(
-                        video_file, voice_sample_audio, transcript_result
+                        video_file, voice_sample_audio, transcript_result, temp_audio_vocal if separated_audio else None
                     )
                     if reference_audio_for_cloning:
-                        import shutil
                         shutil.copy2(voice_sample_audio, voice_sample_file)
                         self.log(f"сэмпл голоса сохранен: {voice_sample_file}")
                 elif voice_method == "file_clone":
@@ -900,20 +971,29 @@ class dupellabs:
                 self.log("шаг 5: генерируем звук...")
                 
                 if voice_method in ["video_clone", "file_clone"] and reference_audio_for_cloning and self.voice_clone_model:
-                    success = self.generate_dubbed_audio_clone(
-                        translated_text, dubbed_audio, reference_audio_for_cloning
-                    )
+                    success = self.generate_dubbed_audio_clone(translated_text, audio_source_dubbed, reference_audio_for_cloning)
                 else:
-                    success = self.generate_dubbed_audio_standard(translated_text, dubbed_audio)
-                
+                    success = self.generate_dubbed_audio_standard(translated_text, audio_source_dubbed)
+
                 if not success:
                     return
                 
                 self.log("генерация звука завершена")
+
+                if separated_audio:
+                    self.log("шаг 5.1: комбинируем вокал и инструментал...")
+                    success = self.combine_audio(temp_audio_vocal,temp_audio_instrumental,dubbed_audio)
+
+                    if not success:
+                        return
+                    
+                    self.log("комбинирование завершено")
                 
                 self.log("шаг 6: комбинируем аудио с оригинальным видео...")
-                if not self.combine_video_audio(video_file, dubbed_audio, output_video):
+                if not self.combine_video_audio(temp_video, dubbed_audio, output_video):
                     return
+                
+                self.log("комбинирование завершено")
                 
                 self.log(f"дубляж завершен!")
                 self.log(f"финальное видео: {output_video}")
@@ -965,10 +1045,12 @@ def main():
         import librosa
         import soundfile as sf
         from scipy import signal
+        from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip
+        from audio_separator.separator import Separator
     except ImportError as e:
         print(f"отсутствуют пакеты. {e}")
         print("установите слеующие пакеты используя эту команду:")
-        print("pip install openai-whisper pyttsx3 coqui-tts torch librosa soundfile scipy")
+        print("pip install openai-whisper pyttsx3 coqui-tts torch librosa soundfile scipy onnxruntime audio-separator moviepy==1.0.3")
         return
     
  
@@ -996,7 +1078,7 @@ def main():
         print("FFmpeg нужен, но не найден")
         print("установите FFmpeg")
         return
-    
+        
     root = tk.Tk()
     app = dupellabs(root)
     root.mainloop()
