@@ -269,13 +269,13 @@ class dupellabs:
         ttk.Label(lang_frame, text="язык в видео (whisper):").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.source_lang_var = tk.StringVar(value="Auto-detect")
         source_lang_combo = ttk.Combobox(lang_frame, textvariable=self.source_lang_var, 
-                                        values=list(self.whisper_languages.keys()), state="readonly", width=20)
-        source_lang_combo.grid(row=0, column=1, padx=(5, 20), sticky=tk.W)
+                                        values=list(self.whisper_languages.keys()), state="readonly")
+        source_lang_combo.grid(row=0, column=1, padx=(5, 0), sticky=tk.W)
         
         ttk.Label(lang_frame, text="целевой язык (перевод):").grid(row=0, column=2, sticky=tk.W, pady=5)
         self.target_lang_var = tk.StringVar(value="Spanish")
         target_lang_combo = ttk.Combobox(lang_frame, textvariable=self.target_lang_var, 
-                                        values=list(self.translation_languages.keys()), state="readonly", width=20)
+                                        values=list(self.translation_languages.keys()), state="readonly")
         target_lang_combo.grid(row=0, column=3, padx=(5, 0), sticky=tk.W)
         
 
@@ -283,9 +283,9 @@ class dupellabs:
         model_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
         
         ttk.Label(model_frame, text="модель whisper:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.model_var = tk.StringVar(value="large")
+        self.model_var = tk.StringVar(value="large-v2")
         model_combo = ttk.Combobox(model_frame, textvariable=self.model_var, 
-                                  values=["tiny", "base", "small", "medium", "large"], 
+                                  values=["tiny", "base", "small", "medium", "large-v1", "large-v2", "large-v3", "large-v3-turbo"], 
                                   state="readonly")
         model_combo.grid(row=0, column=1, padx=(5, 40), sticky=tk.W)
 
@@ -376,7 +376,7 @@ class dupellabs:
         ttk.Checkbutton(audio_frame, text="шумоподавление", 
                        variable=self.noise_reduction_var).pack(anchor='w')
         
-        self.normalize_audio_var = tk.BooleanVar(value=True)
+        self.normalize_audio_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(audio_frame, text="нормализировать звук", 
                        variable=self.normalize_audio_var).pack(anchor='w')
         
@@ -401,7 +401,7 @@ class dupellabs:
                                 orient=tk.HORIZONTAL)
         sample_scale.pack(fill='x')
         
-        self.voice_activity_detection_var = tk.BooleanVar(value=True)
+        self.voice_activity_detection_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(extract_frame, text="детекция голосовой активности", 
                        variable=self.voice_activity_detection_var).pack(anchor='w')
     
