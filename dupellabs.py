@@ -268,16 +268,16 @@ class dupellabs:
         
         ttk.Label(lang_frame, text="язык в видео (whisper):").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.source_lang_var = tk.StringVar(value="Auto-detect")
-        source_lang_combo = ttk.Combobox(lang_frame, textvariable=self.source_lang_var, 
+        source_lang_combo = ttk.Combobox(lang_frame, textvariable=self.source_lang_var,
                                         values=list(self.whisper_languages.keys()), state="readonly")
-        source_lang_combo.grid(row=0, column=1, padx=(5, 0), sticky=tk.W)
-        
+        source_lang_combo.grid(row=0, column=1, sticky=tk.W)
+
         ttk.Label(lang_frame, text="целевой язык (перевод):").grid(row=0, column=2, sticky=tk.W, pady=5)
         self.target_lang_var = tk.StringVar(value="Spanish")
-        target_lang_combo = ttk.Combobox(lang_frame, textvariable=self.target_lang_var, 
+        target_lang_combo = ttk.Combobox(lang_frame, textvariable=self.target_lang_var,
                                         values=list(self.translation_languages.keys()), state="readonly")
-        target_lang_combo.grid(row=0, column=3, padx=(5, 0), sticky=tk.W)
-        
+        target_lang_combo.grid(row=0, column=3, sticky=tk.W, padx=(20, 0))
+
 
         model_frame = ttk.LabelFrame(main_frame, text="ИИ модели", padding="10")
         model_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
@@ -293,7 +293,7 @@ class dupellabs:
         self.separator_model = tk.StringVar(value="model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt")
         separator_model_combo = ttk.Combobox(model_frame,textvariable=self.separator_model,
                                              values=["model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt", "model_bs_roformer_ep_317_sdr_12.9755.ckpt", "UVR-MDX-NET-Inst_HQ_3.onnx", "UVR_MDXNET_KARA_2.onnx"],
-                                             state="readonly")
+                                             state="readonly", width=50)
         separator_model_combo.grid(row=0, column=4, padx=(5, 0), sticky=tk.W)
         
 
@@ -301,12 +301,10 @@ class dupellabs:
         voice_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
         
         self.voice_method_var = tk.StringVar(value="video_clone")
-        ttk.Radiobutton(voice_frame, text="дефолтный ттс (для тестов?)", variable=self.voice_method_var, 
-                       value="standard").grid(row=0, column=0, sticky=tk.W)
         ttk.Radiobutton(voice_frame, text="клонировать голос из видео", variable=self.voice_method_var, 
-                       value="video_clone").grid(row=0, column=1, sticky=tk.W, padx=(20, 0))
+                       value="video_clone").grid(row=0, column=0, sticky=tk.W)
         ttk.Radiobutton(voice_frame, text="клонировать из файла", variable=self.voice_method_var, 
-                       value="file_clone").grid(row=0, column=2, sticky=tk.W, padx=(20, 0))
+                       value="file_clone").grid(row=0, column=1, sticky=tk.W, padx=(20, 0))
         
 
         ttk.Label(voice_frame, text="референс звук (только для файла):").grid(row=1, column=0, sticky=tk.W, pady=5)
@@ -316,20 +314,13 @@ class dupellabs:
         separator_settings_frame = ttk.LabelFrame(main_frame, text="настройки separator (отделяет голос от музыки)", padding="10")
         separator_settings_frame.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
         self.separator_enabled = tk.BooleanVar(value=True)
-        ttk.Checkbutton(separator_settings_frame, text="включить separator?", variable=self.separator_enabled).pack(anchor='w')
+        ttk.Checkbutton(separator_settings_frame, text="включить separator", variable=self.separator_enabled).pack(anchor='w')
         
         tts_settings_frame = ttk.LabelFrame(main_frame, text="ттс настройки", padding="10")
         tts_settings_frame.grid(row=7, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
         
-        ttk.Label(tts_settings_frame, text="скорость:").grid(row=0, column=0, padx=(0, 5))
-        self.speed_var = tk.IntVar(value=150)
-        speed_scale = ttk.Scale(tts_settings_frame, from_=50, to=300, variable=self.speed_var, orient=tk.HORIZONTAL)
-        speed_scale.grid(row=0, column=1, padx=(0, 10), sticky=(tk.W, tk.E))
-        
-        ttk.Label(tts_settings_frame, text="звук:").grid(row=0, column=2, padx=(0, 5))
-        self.volume_var = tk.DoubleVar(value=0.9)
-        volume_scale = ttk.Scale(tts_settings_frame, from_=0.1, to=1.0, variable=self.volume_var, orient=tk.HORIZONTAL)
-        volume_scale.grid(row=0, column=3, sticky=(tk.W, tk.E))
+        self.tts_by_segments = tk.BooleanVar(value=False)
+        ttk.Checkbutton(tts_settings_frame, text="использовать ттс по сегментам (если результат слишком короткий) (экспериментальная хуета)", variable=self.tts_by_segments).pack(anchor='w')
         
         tts_settings_frame.columnconfigure(1, weight=1)
         tts_settings_frame.columnconfigure(3, weight=1)
@@ -401,7 +392,7 @@ class dupellabs:
                                 orient=tk.HORIZONTAL)
         sample_scale.pack(fill='x')
         
-        self.voice_activity_detection_var = tk.BooleanVar(value=False)
+        self.voice_activity_detection_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(extract_frame, text="детекция голосовой активности", 
                        variable=self.voice_activity_detection_var).pack(anchor='w')
     
@@ -486,27 +477,108 @@ class dupellabs:
         except Exception as e:
             self.log(f"ошибка комбинирования: {str(e)}")
             return False
+        
+    def dub_audio_by_segments_clone(self, output_audio_path, reference_audio_path, transcript_result):
+        """дубляж ии по сегментам"""
+        try:
+            if self.voice_clone_model is None:
+                self.log("клон голоса не удался...rip garysmdo")
+                return None
+            
+            segments = transcript_result.get('segments', [])
+            target_lang_code = self.translation_languages[self.target_lang_var.get()]
+
+            if not os.path.exists(reference_audio_path):
+                self.log(f"референс аудио не найден: {reference_audio_path}")
+                return None
+
+            if not segments:
+                self.log("сегменты для перевода не найдены.")
+                return None
+            
+            self.log("начинаем перевод сегментов")
+            
+            all_segments_audio = []
+
+            sr = 22050
+            total_duration = segments[-1]["end"]
+            timeline = np.zeros(int(total_duration * sr), dtype=np.float32)
+            
+            for i, segment in enumerate(segments, start=1):
+                start = segment["start"]
+                end = segment["end"]
+                txt = segment["text"]
+
+                if not txt or txt == "" or txt == " ":
+                    self.log("че за хуйня где текст")
+                    continue
+
+                self.log(f"переводим {i}/{len(segments)}...")
+
+                text = self.translate_text(
+                    txt, 
+                    self.source_lang_var.get(), 
+                    self.target_lang_var.get()
+                )
+
+                if not text or text == "" or text == " ":
+                    self.log(f"сегмент {i} пропущен (нет текста)")
+                    continue
+
+                audio_data = self.voice_clone_model.tts(
+                    text=text,
+                    speaker_wav=reference_audio_path,
+                    language=target_lang_code
+                )
+
+                all_segments_audio.append({
+                    "audio": audio_data,
+                    "start": start,
+                    "end": end
+                })
+                self.log(f"сегмент {i} успешно переведён")
+
+            for segment in all_segments_audio:
+                start = int(segment["start"] * sr)
+                end = int(segment["end"] * sr)
+                audio = segment["audio"]
+
+                length = len(timeline)
+
+                if start >= length:
+                    continue
+
+                if end > length:
+                    end = length
+
+                expected_len = end - start
+                audio = audio[:expected_len]
+
+                min_len = min(len(audio), end - start)
+                timeline[start:start + min_len] += audio[:min_len]
+
+            self.log(f"все {len(segments)} сегментов успешно переведены и склеены!")
+
+            sf.write(output_audio_path, timeline, sr)
+            return True
+
+        except Exception as e:
+            self.log(f"ошибка дубляжа по сегментам: {str(e)}")
+            return None
     
-    def extract_voice_sample_from_video(self, video_path, output_audio_path, transcript_result, audio_vocal):
+    def extract_voice_sample_from_audio(self, audio_path, output_audio_path, transcript_result):
         """извлекаем сэмпл голоса из видео для клонирования"""
         try:
             self.update_status("извлекаем сэмпл голоса из видео...")
             self.log("извлекаем сэмпл голоса...")
 
-            temp_full_audio = output_audio_path + "_full.wav"
-
-            if audio_vocal and os.path.exists(audio_vocal):
-                shutil.copyfile(audio_vocal, temp_full_audio)
-            elif not self.extract_audio(video_path, temp_full_audio):
-                return None
-
+            temp_full_audio = audio_path
             audio_data, sr = librosa.load(temp_full_audio, sr=22050)
             
             segments = transcript_result.get('segments', [])
             if not segments:
                 self.log("используем весь звук")
                 sf.write(output_audio_path, audio_data, sr)
-                os.remove(temp_full_audio)
                 return output_audio_path
             
             best_segments = []
@@ -538,7 +610,6 @@ class dupellabs:
 
                 segment_audio = audio_data[:int(10 * sr)]
                 sf.write(output_audio_path, segment_audio, sr)
-                os.remove(temp_full_audio)
                 return output_audio_path
             
             best_segments.sort(key=lambda x: x['rms'], reverse=True)
@@ -566,7 +637,6 @@ class dupellabs:
                 sf.write(output_audio_path, best_segments[0]['audio'], sr)
                 self.log("использован первый доступный сегмент")
             
-            os.remove(temp_full_audio)
             return output_audio_path
             
         except Exception as e:
@@ -616,6 +686,11 @@ class dupellabs:
     
     def translate_text(self, text, source_lang, target_lang):
         """переводим через различные методы"""
+
+        if not text or text == "" or text == " ":
+            self.log("че за хуйня где текст")
+            return None
+        
         try:
             if source_lang == target_lang:
                 return text
@@ -646,7 +721,7 @@ class dupellabs:
             from googletrans import Translator
             translator = Translator()
             
-            if self.chunk_translation_var.get():
+            if self.chunk_translation_var.get() and not self.tts_by_segments:
                 sentences = [s.strip() for s in text.split('. ') if s.strip()]
                 translated_sentences = []
                 
@@ -756,39 +831,23 @@ class dupellabs:
             self.log(f"прямой запрос не сработал: {str(e)}")
             return text
     
-    def generate_dubbed_audio_standard(self, text, output_audio_path):
-        """генерируем звук через ттс"""
-        try:
-            self.update_status("генерация звука (дефолтный ттс)...")
-            self.log("генерация звука ттс...")
-            
-            self.tts_engine.setProperty('rate', self.speed_var.get())
-            self.tts_engine.setProperty('volume', self.volume_var.get())
-            
-            self.tts_engine.save_to_file(text, output_audio_path)
-            self.tts_engine.runAndWait()
-            
-            if self.normalize_audio_var.get():
-                self.normalize_audio(output_audio_path)
-            
-            return True
-        except Exception as e:
-            self.log(f"ошибка генерации ттс: {str(e)}")
-            return False
-    
     def generate_dubbed_audio_clone(self, text, output_audio_path, reference_audio_path):
         """дубляж ии"""
         try:
             if self.voice_clone_model is None:
-                self.log("ребят извиняйте клон голоса не пашет, переходим на дефолт ттс")
-                return self.generate_dubbed_audio_standard(text, output_audio_path)
+                self.log("клон голоса не удался...rip garysmdo")
+                return False
+            
+            if not text or text == "" or text == " ":
+                self.log("че за хуйня где текст")
+                return False
             
             self.update_status("генерируем звук (клонирование голоса)...")
             self.log("генерируем звук клонированого голоса...")
             
             if not os.path.exists(reference_audio_path):
                 self.log(f"референс аудио не найден: {reference_audio_path}")
-                return self.generate_dubbed_audio_standard(text, output_audio_path)
+                return False
             
             target_lang_code = self.translation_languages[self.target_lang_var.get()]
             
@@ -805,8 +864,7 @@ class dupellabs:
             return True
         except Exception as e:
             self.log(f"ошибка генерации клонированого голоса: {str(e)}")
-            self.log("во избежание проблем переходим на дефолтный ттс...")
-            return self.generate_dubbed_audio_standard(text, output_audio_path)
+            return False
     
     def normalize_audio(self, audio_path):
         """нормализация звука"""
@@ -892,7 +950,12 @@ class dupellabs:
                 voice_sample_file = os.path.join(output_dir, f"{video_name}_voice_sample{lang_suffix}.wav")
 
                 clip = VideoFileClip(str(Path(video_file)))
-                watermark = ImageClip("watermark.png").set_duration(clip.duration).set_position(lambda t: (clip.w - watermark.w - 5, clip.h - watermark.h - 10))
+
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                watermark_path = os.path.join(script_dir, "watermark.png")
+                watermark = ImageClip(watermark_path).set_duration(clip.duration).set_position(lambda t: (clip.w - watermark.w - 5, clip.h - watermark.h - 10))
+
+                step = 0
 
                 separated_audio = None
 
@@ -902,24 +965,27 @@ class dupellabs:
                     self.separator.load_model(separator_model)
                     self.log(f"загружена модель сепаратора: {separator_model}")
 
-                self.log("шаг 0: добавляем вотермарку...")
+                self.log(f"шаг {step}: добавляем вотермарку...")
+                step += 1
 
                 video_with_watermark = CompositeVideoClip([clip,watermark])
                 video_with_watermark.write_videofile(temp_video)
                 
-                self.log("шаг 1: берем звук из видео...")
+                self.log(f"шаг {step}: берем звук из видео...")
                 if not self.extract_audio(video_file, temp_audio):
                     return
                 self.log("экстракция звука из файла завершена.")
+                step += 1
 
                 if self.separator_enabled.get():
-                    self.log("шаг 1.1: отделяем вокал от инструментала...")
+                    self.log(f"шаг {step}: отделяем вокал от инструментала...")
                     separated_audio = self.separator.separate(temp_audio,temp_audio_names) 
+                    step += 1
 
                 audio_source_temp = temp_audio_vocal if separated_audio else temp_audio
                 audio_source_dubbed = temp_audio_vocal if separated_audio else dubbed_audio
 
-                self.log("шаг 2: транскрипция звука...")
+                self.log(f"шаг {step}: транскрипция звука...")
                 transcript_result = self.transcribe_audio(audio_source_temp)
 
                 if transcript_result is None:
@@ -927,30 +993,34 @@ class dupellabs:
                 
                 original_text = transcript_result['text']
                 self.log(f"транскрипция завершена. текст: {original_text[:100]}...")
+                step += 1
                 
                 reference_audio_for_cloning = None
                 if voice_method == "video_clone":
-                    self.log("шаг 3: извлекаем сэмпл голоса из видео...")
-                    reference_audio_for_cloning = self.extract_voice_sample_from_video(
-                        video_file, voice_sample_audio, transcript_result, temp_audio_vocal if separated_audio else None
+                    self.log(f"шаг {step}: извлекаем сэмпл голоса из видео...")
+                    reference_audio_for_cloning = self.extract_voice_sample_from_audio(
+                        audio_source_temp, voice_sample_audio, transcript_result
                     )
                     if reference_audio_for_cloning:
                         shutil.copy2(voice_sample_audio, voice_sample_file)
                         self.log(f"сэмпл голоса сохранен: {voice_sample_file}")
                 elif voice_method == "file_clone":
                     reference_audio_for_cloning = self.reference_audio_path.get()
-                
-                self.log("шаг 4: переводим текст...")
-                translated_text = self.translate_text(
-                    original_text, 
-                    self.source_lang_var.get(), 
-                    self.target_lang_var.get()
-                )
-                self.log(f"перевод закончен. переведенный текст: {translated_text[:100]}...")
+                step += 1
+
+                if not self.tts_by_segments.get():
+                    self.log(f"шаг {step}: переводим текст...")
+                    translated_text = self.translate_text(
+                        original_text, 
+                        self.source_lang_var.get(), 
+                        self.target_lang_var.get()
+                    )
+                    self.log(f"перевод закончен. переведенный текст: {translated_text[:100]}...")
+                    step += 1
                 
                 enhanced_transcript = {
                     'original': transcript_result,
-                    'translated_text': translated_text,
+                    'translated_text': translated_text if not self.tts_by_segments.get() else "хуй",
                     'source_language': self.source_lang_var.get(),
                     'target_language': self.target_lang_var.get(),
                     'voice_sample_used': reference_audio_for_cloning is not None,
@@ -968,28 +1038,31 @@ class dupellabs:
                 with open(transcript_file, 'w', encoding='utf-8') as f:
                     json.dump(enhanced_transcript, f, indent=2, ensure_ascii=False)
                 
-                self.log("шаг 5: генерируем звук...")
+                self.log(f"шаг {step}: генерируем звук...")
                 
                 if voice_method in ["video_clone", "file_clone"] and reference_audio_for_cloning and self.voice_clone_model:
-                    success = self.generate_dubbed_audio_clone(translated_text, audio_source_dubbed, reference_audio_for_cloning)
-                else:
-                    success = self.generate_dubbed_audio_standard(translated_text, audio_source_dubbed)
+                    if self.tts_by_segments.get():
+                        success = self.dub_audio_by_segments_clone(audio_source_dubbed, reference_audio_for_cloning, transcript_result)
+                    else:
+                        success = self.generate_dubbed_audio_clone(translated_text, audio_source_dubbed, reference_audio_for_cloning)
 
                 if not success:
                     return
                 
                 self.log("генерация звука завершена")
+                step += 1
 
                 if separated_audio:
-                    self.log("шаг 5.1: комбинируем вокал и инструментал...")
+                    self.log(f"шаг {step}: комбинируем вокал и инструментал...")
                     success = self.combine_audio(temp_audio_vocal,temp_audio_instrumental,dubbed_audio)
 
                     if not success:
                         return
                     
                     self.log("комбинирование завершено")
+                    step += 1
                 
-                self.log("шаг 6: комбинируем аудио с оригинальным видео...")
+                self.log(f"шаг {step}: комбинируем аудио с оригинальным видео...")
                 if not self.combine_video_audio(temp_video, dubbed_audio, output_video):
                     return
                 
